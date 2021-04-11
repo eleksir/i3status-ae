@@ -1,9 +1,5 @@
 #!/usr/bin/perl
 
-# TODO: on i3wm reload (i3status restart), restore active windows status
-# TODO: make battery plugin take into account charge level, add ability to call suspend2disk on critical charge level
-# TODO: More complex PA-plugin with volume adjustment of default sink
-
 # we need to disable hash shuffling in order to make as less prints to stdout as possible
 BEGIN {
 	unless (defined $ENV{PERL_PERTURB_KEYS}) {
