@@ -1,0 +1,28 @@
+#!/usr/bin/env perlcritic
+severity    = 5
+verbose     = 8
+
+[-Variables::ProhibitPunctuationVars]
+[-ControlStructures::ProhibitUnlessBlocks]
+[-Variables::RequireLocalizedPunctuationVars]
+[-Subroutines::ProhibitSubroutinePrototypes]
+[-ErrorHandling::RequireCarping]
+[-ValuesAndExpressions::ProhibitEmptyQuotes]
+[-ValuesAndExpressions::ProhibitMagicNumbers]
+[-ValuesAndExpressions::ProhibitNoisyQuotes]
+[-Subroutines::ProhibitExcessComplexity]
+[-InputOutput::ProhibitBacktickOperators]
+[-RegularExpressions::RequireExtendedFormatting]
+[-RegularExpressions::ProhibitEnumeratedClasses]
+[-RegularExpressions::RequireLineBoundaryMatching]
+[-RegularExpressions::RequireDotMatchAnything]
+[-ControlStructures::ProhibitCascadingIfElse]
+[-InputOutput::RequireCheckedSyscalls]
+[-InputOutput::RequireCheckedClose]
+[-InputOutput::RequireBriefOpen]
+[-CodeLayout::ProhibitParensWithBuiltins]
+[-ControlStructures::ProhibitPostfixControls]
+[-ValuesAndExpressions::ProhibitLongChainsOfMethodCalls]
+[-Modules::RequireVersionVar]
+[-CodeLayout::RequireTidyCode]
+[-TestingAndDebugging::RequireUseWarnings]

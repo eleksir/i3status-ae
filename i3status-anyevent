@@ -1,5 +1,8 @@
 #!/usr/bin/perl
 
+use strict;
+use warnings;
+
 # we need to disable hash shuffling in order to make as less prints to stdout as possible
 BEGIN {
 	unless (defined $ENV{PERL_PERTURB_KEYS}) {
@@ -40,8 +43,15 @@ $i3->connect->recv or die 'Unable to connect to i3';
 # event pool
 my @EP;
 
+# STDOUT spew flag variable
+my $UPDATE = 0;
+
+# output json "object" that used for STDOUT json generation
+my $O = undef;
+
 # reload config and re-apply it on SIGHUP
 local $SIG{HUP} = sub {
+	$O = undef;
 	$CONF = readconf ();
 	active_win_borders ();
 	$#EP = -1;
@@ -51,26 +61,8 @@ local $SIG{HUP} = sub {
 my @month = ('Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек');
 my @week_day = ('Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб');
 
-# File handler pool
-my $LAHANDLE;
-my $MEMINFOHANDLE;
-my $CPUTEMPHANDLE;
-my $CAPSHANDLE;
-
 # everything for text labels on i3bar
-my $wallclock = '';
-my $la = '';
-my $meminfo = '';
-my $cputemp = '';
-my $caps_state = '';
-my $charge = '';
-my $tcp_check = 0;
-my $file_check = 0;
 my $file_check_mtime = 0;
-my $simple_volume_pa = '<big>♪</big> ??%';
-my $interfaces = '??';
-my $output_string;
-my $old_output_string = '';
 my $STDIN_FIRST_LINE_DROPPED = 0;
 # hp, kernel 5.4.x
 my $BATTERY_CHARGE_NOW_FILE = sprintf '%s/charge_now', $CONF->{battery}->{sys_dir};
@@ -94,12 +86,12 @@ my $CAPS_LED_PATH = find_caps_led ();
 my $win;
 
 # capture click events and do not override sigstop and sigcont numbers
-print << 'EOJSON';
+print {*STDOUT} << 'EOJSON';
 {"version": 1, "click_events": true}
 [ [], 
 EOJSON
 
-# i3 events should persist over config relads
+# i3 events should persist over config reloads
 my $i3_subscription->{window} = sub {
 	my $w = shift;
 
@@ -125,6 +117,7 @@ my $i3_subscription->{window} = sub {
 		}
 
 		active_win_borders ();
+		$UPDATE = 1;
 	}
 };
 
@@ -133,7 +126,7 @@ $i3_subscription->{_error} = sub {
 	die "Connection to i3 closed: $msg";
 };
 
-$i3->subscribe($i3_subscription)->recv->{success} || die 'Unable to subscribe to i3 events';
+$i3->subscribe ($i3_subscription)->recv->{success} || die 'Unable to subscribe to i3 events';
 
 # now we can add other events
 add_events ();
@@ -144,6 +137,11 @@ exit 0;
 
 
 sub add_events () {
+	# Create stdout json "object" stub from static objects
+	if ($CONF->{app_buttons}) {
+		@{$O->{apps}} = @{$CONF->{apps}};
+	}
+
 	# Register callbacks/event handlers
 	push @EP, AnyEvent->timer (
 		after => 1,
@@ -157,103 +155,61 @@ sub add_events () {
 	push @EP, AnyEvent->timer (
 		after    => 1,    # sleep 1 second
 		interval => 0.3,  # then invoke every ~1/3 second
-		cb       => sub { # the callback to invoke
-			my $OUTPUT;
+		cb       => sub {
+			# Print JSON only if there are updates ready
+			if ($UPDATE) {
+				my $jsonobj;
 
-			if ($CONF->{app_buttons}) {
-				@{$OUTPUT} = @{$CONF->{apps}};
-			}
-
-			if ($CONF->{capslock}->{enabled}) {
-				if ($caps_state) {
-					push @{$OUTPUT}, {
-						background => $CONF->{capslock}->{color},
-						color => $CONF->{capslock}->{background},
-						border => $CONF->{capslock}->{background},
-						full_text => 'caps',
-						markup => 'pango'
-					};
-				} else {
-					push @{$OUTPUT}, {
-						color => $CONF->{capslock}->{color},
-						background => $CONF->{capslock}->{background},
-						border => $CONF->{capslock}->{background},
-						full_text => 'caps',
-						markup => 'pango'
-					};
+				if ($CONF->{app_buttons}) {
+					@{$jsonobj} = @{$O->{apps}};
 				}
-			}
 
-			if ($CONF->{cpu_temp}->{enabled}) {
-				push @{$OUTPUT}, { color => $CONF->{color}, full_text => $cputemp };
-			}
-
-			if ($CONF->{mem}) {
-				push @{$OUTPUT}, { color => $CONF->{color}, full_text => $meminfo };
-			}
-
-			if ($CONF->{la}) {
-				push @{$OUTPUT}, { color => $CONF->{color}, full_text => "LA: $la" };
-			}
-
-			my $vpn_str = 'VPN:';
-
-			if ($CONF->{vpn}->{enabled}) {
-				if ($file_check) {
-					$vpn_str .= '⍋';
-				} else {
-					$vpn_str .= '⍒';
+				if ($CONF->{capslock}->{enabled}) {
+					push @{$jsonobj}, $O->{capslock};
 				}
-			}
 
-			if ($CONF->{vpn}->{tcp_check}->{enabled}) {
+				if ($CONF->{cpu_temp}->{enabled}) {
+					push @{$jsonobj}, $O->{cputemp};
+				}
+
+				if ($CONF->{mem}) {
+					push @{$jsonobj}, $O->{mem};
+				}
+
+				if ($CONF->{la}) {
+					push @{$jsonobj}, $O->{la};
+				}
+
 				if ($CONF->{vpn}->{enabled}) {
-					$vpn_str .= ':';
+					push @{$jsonobj}, $O->{vpn};
 				}
 
-				if ($tcp_check) {
-					$vpn_str .= '✔';
+				if ($CONF->{'net-if'}->{enabled}) {
+					push @{$jsonobj}, $O->{interfaces};
+				}
+
+				if ($CONF->{battery}->{enabled}) {
+					push @{$jsonobj}, $O->{battery};
+				}
+
+				if ($CONF->{'simple-volume-pa'}) {
+					push @{$jsonobj}, $O->{'simple-volume-pa'};
+				}
+
+				if ($CONF->{clock}->{enabled}) {
+					push @{$jsonobj}, $O->{wallclock};
+				}
+
+				my $output_string = eval { encode_json $jsonobj };
+
+				if (defined $output_string) {
+						print {*STDOUT} decode ('UTF-8', $output_string) . ",\n";
 				} else {
-					$vpn_str .= '✘';
+					warn $@;
 				}
+
+				$UPDATE = 0;
 			}
-
-			if ($CONF->{vpn}->{tcp_check}->{enabled} || $CONF->{vpn}->{enabled}) {
-				push @{$OUTPUT}, { color => $CONF->{color}, full_text => $vpn_str };
-			}
-
-			if ($CONF->{'net-if'}->{enabled}) {
-				push @{$OUTPUT}, { color => $CONF->{color}, full_text => $interfaces, markup => 'pango' };
-			}
-
-			if ($CONF->{battery}->{enabled}) {
-				push @{$OUTPUT}, { color => $CONF->{color}, full_text => $charge, markup => 'pango' };
-			}
-
-			if ($CONF->{'simple-volume-pa'}) {
-				push @{$OUTPUT}, {
-					color => $CONF->{color},
-					full_text => sprintf ('<big>♪</big> %s%%', $simple_volume_pa),
-					markup => 'pango'
-				};
-			}
-
-			if ($CONF->{clock}->{enabled}) {
-				push @{$OUTPUT}, { name => 'wallclock', color => $CONF->{clock}->{color}, full_text => "<big>$wallclock</big>", markup => 'pango'};
-			}
-
-			$output_string = eval { encode_json $OUTPUT };
-
-			if (defined $output_string) {
-				if ($output_string ne $old_output_string) {
-					print decode ('UTF-8', $output_string) . ",\n";
-					$old_output_string = $output_string;
-				}
-			} else {
-				warn $@;
-			}
-
-			@{$OUTPUT} = -1;
 		}
 	);
 
@@ -319,28 +275,51 @@ sub add_events () {
 			after    => 0,    # first invoke ASAP
 			interval => 0.3,  # then invoke every 0.3 seconds
 			cb       => sub { # the callback to invoke
+				my $caps_state = 0;
+				my $CAPSHANDLE;
+
 				if (defined $CAPS_LED_PATH) {
-					if (defined $CAPSHANDLE) {
-						if (tell ($CAPSHANDLE) == -1) {
-							unless (open $CAPSHANDLE, '<', $CAPS_LED_PATH) {
-								$CAPS_LED_PATH = undef;
-								$caps_state = 2;
-							}
-						}
-					} else {
-						unless (open $CAPSHANDLE, '<', $CAPS_LED_PATH) {
-							$CAPS_LED_PATH = undef;
-							$caps_state = 2
-						}
+					unless (open $CAPSHANDLE, '<', $CAPS_LED_PATH) {
+						$CAPS_LED_PATH = undef;
+						$caps_state = 2
 					}
 				} else {
 					$caps_state = 2;
 				}
 
 				if ($caps_state ne '2') {
-					$caps_state = eval { readline ($CAPSHANDLE) };
-					seek $CAPSHANDLE, SEEK_SET, 0;
+					$caps_state = readline $CAPSHANDLE;
+					close $CAPSHANDLE;
 					chomp $caps_state;
+
+					if (! defined $O->{capslock}->{state}) {
+						$O->{capslock}->{border} = $CONF->{capslock}->{background};
+						$O->{capslock}->{full_text} = 'caps';
+						$O->{capslock}->{markup} = 'pango';
+						$O->{capslock}->{state} = $caps_state;
+
+						if ($caps_state) {
+							$O->{capslock}->{background} = $CONF->{capslock}->{color};
+							$O->{capslock}->{color} = $CONF->{capslock}->{background};
+						} else {
+							$O->{capslock}->{background} = $CONF->{capslock}->{background};
+							$O->{capslock}->{color} = $CONF->{capslock}->{color};
+						}
+
+						$UPDATE = 1;
+					} elsif ($O->{capslock}->{state} ne $caps_state) {
+						$O->{capslock}->{state} = $caps_state;
+
+						if ($caps_state) {
+							$O->{capslock}->{background} = $CONF->{capslock}->{color};
+							$O->{capslock}->{color} = $CONF->{capslock}->{background};
+						} else {
+							$O->{capslock}->{background} = $CONF->{capslock}->{background};
+							$O->{capslock}->{color} = $CONF->{capslock}->{color};
+						}
+
+						$UPDATE = 1;
+					}
 				}
 			}
 		);
@@ -355,7 +334,18 @@ sub add_events () {
 				# Fetch time for clock
 				my ($sec, $min, $hour, $mday, $mon, $year, $wday) = (localtime)[0,1,2,3,4,5,6];
 				$year = $year + 1900;
-				$wallclock = sprintf '     %s, %s %s %s  %02s:%02s  ', $week_day[$wday], $mday, $month[$mon], $year, $hour, $min;
+				my $wallclock = sprintf '<big>     %s, %s %s %s  %02s:%02s  </big>', $week_day[$wday], $mday, $month[$mon], $year, $hour, $min;
+
+				if (! defined $O->{wallclock}->{'full_text'}) {
+					$O->{wallclock}->{'full_text'} = $wallclock;
+					$O->{wallclock}->{'name'} = 'wallclock';
+					$O->{wallclock}->{'color'} = '#666666';
+					$O->{wallclock}->{'markup'} = 'pango';
+					$UPDATE = 1;
+				} elsif ($O->{wallclock}->{'full_text'} ne $wallclock) {
+					$O->{wallclock}->{'full_text'} = $wallclock;
+					$UPDATE = 1;
+				}
 			}
 		);
 	}
@@ -370,7 +360,6 @@ sub add_events () {
 				cb       => sub { # the callback to invoke
 					my @up;
 					my $str = `upower -i $CONF->{battery}->{upower_device}`;
-					$charge = '<big>⚡</big> ??% • 00:00';
 
 					if ($?) {
 						return;
@@ -424,7 +413,17 @@ sub add_events () {
 						$time_to = '00:00';
 					}
 
-					$charge = sprintf '<big>⚡</big> %s %s %s', $percentage, $state, $time_to;
+					my $charge = sprintf '<big>⚡</big> %s %s %s', $percentage, $state, $time_to;
+
+					if (! defined $O->{battery}->{'full_text'}) {
+						$O->{battery}->{'full_text'} = $charge;
+						$O->{battery}->{'color'} = '#3e78fd';
+						$O->{battery}->{'markup'} = 'pango';
+						$UPDATE = 1;
+					} elsif ($O->{battery}->{'full_text'} ne $charge) {
+						$O->{battery}->{'full_text'} = $charge;
+						$UPDATE = 1;
+					}
 				}
 			);
 		} else {
@@ -438,8 +437,18 @@ sub add_events () {
 					my $state;
 					my ($CH, $CCM, $STH);
 
+					if (!defined $O->{battery}->{'full_text'}) {
+						$O->{battery}->{'full_text'} = '<big>⚡</big> ??% •';
+						$O->{battery}->{'color'} = '#3e78fd';
+						$O->{battery}->{'markup'} = 'pango';
+					}
+
 					unless (open $CH, '<', $BATTERY_CHARGE_NOW_FILE) {
-						$charge = '<big>⚡</big> ??% •';
+						if ($O->{battery}->{'full_text'} ne '<big>⚡</big> ??% •') {
+							$O->{battery}->{'full_text'} = '<big>⚡</big> ??% •';
+							$UPDATE = 1;
+						}
+
 						return;
 					}
 
@@ -448,7 +457,11 @@ sub add_events () {
 					close $CH;
 
 					unless (open $CCM, '<', $BATTERY_CHARGE_FULL_FILE) {
-						$charge = '<big>⚡</big> ??% •';
+						if ($O->{battery}->{'full_text'} ne '<big>⚡</big> ??% •') {
+							$O->{battery}->{'full_text'} = '<big>⚡</big> ??% •';
+							$UPDATE = 1;
+						}
+
 						return;
 					}
 
@@ -457,7 +470,11 @@ sub add_events () {
 					close $CCM;
 
 					unless (open $STH, '<', sprintf '%s/status', $CONF->{battery}->{sys_dir}) {
-						$charge = '<big>⚡</big> ??% •';
+						if ($O->{battery}->{'full_text'} ne '<big>⚡</big> ??% •') {
+							$O->{battery}->{'full_text'} = '<big>⚡</big> ??% •';
+							$UPDATE = 1;
+						}
+
 						return;
 					}
 
@@ -474,7 +491,24 @@ sub add_events () {
 					}
 
 					my $capacity = int (100 * ($current_charge / $charge_max));
-					$charge = sprintf '<big>⚡</big> %s%% %s', $capacity, $state;
+					my $color = '<span foreground="blue">';
+
+					if ($capacity > 85) {
+						$color = '<span foreground="green">';
+					} elsif ($capacity < 25 && $capacity > 15) {
+						$color = '<span foreground="yellow">';
+					} elsif ($capacity <= 15 && $capacity > 11) {
+						$color = '<span foreground="orange">';
+					} elsif ($capacity <= 11) {
+						$color = '<span foreground="red">';
+					}
+
+					my $charge = sprintf '<b><big><span foreground="yellow">⚡</span></big></b> %s%s%%</span> %s', $color, $capacity, $state;
+
+					if ($O->{battery}->{'full_text'} ne $charge) {
+						$O->{battery}->{'full_text'} = $charge;
+						$UPDATE = 1;
+					}
 				}
 			);
 		}
@@ -488,36 +522,31 @@ sub add_events () {
 
 			# Fetch Load Average
 			if ($CONF->{la}) {
-				if (defined $LAHANDLE) {
-					if (tell ($LAHANDLE) == -1) {
-						open $LAHANDLE, '<', '/proc/loadavg';
-					}
-				} else {
-					open $LAHANDLE, '<', '/proc/loadavg';
-				}
+				open my $LAHANDLE, '<', '/proc/loadavg'; ## no critic (InputOutput::RequireCheckedOpen)
+				my $la = readline $LAHANDLE;
+				close $LAHANDLE;
+				$la = sprintf 'LA: %s', (split / /ms, $la, 2)[0];
 
-				$la = readline $LAHANDLE;
-				seek $LAHANDLE, SEEK_SET, 0;
-				$la = (split / /ms, $la, 2)[0];
+				if (! defined $O->{la}->{'full_text'}) {
+					$O->{la}->{'full_text'} = $la;
+					$O->{la}->{'color'} = '#3e78fd';
+					$UPDATE = 1;
+				} elsif ($O->{la}->{'full_text'} ne $la) {
+					$O->{la}->{'full_text'} = $la;
+					$UPDATE = 1;
+				}
 			}
 
 			# populate memory statistics
 			if ($CONF->{mem}) {
-				if (defined $MEMINFOHANDLE) {
-					if (tell ($MEMINFOHANDLE) == -1) {
-						open $MEMINFOHANDLE, '<', '/proc/meminfo';
-					}
-				} else {
-					open $MEMINFOHANDLE, '<', '/proc/meminfo';
-				}
-
+				open my $MEMINFOHANDLE, '<', '/proc/meminfo'; ## no critic (InputOutput::RequireCheckedOpen)
 				my @mem;
 
 				while ( ! eof ($MEMINFOHANDLE) ) {
 					push @mem, readline ($MEMINFOHANDLE);
 				}
 
-				seek $MEMINFOHANDLE, SEEK_SET, 0;
+				close $MEMINFOHANDLE;
 				@mem = map { substr $_, 0, -4 } @mem;
 				my $memtotal = (split /\s+/xms, $mem[0])[1];
 				my $memavail  = (split /\s+/xms, $mem[2])[1];
@@ -526,35 +555,35 @@ sub add_events () {
 				my $shmem = (split /\s+/xms, $mem[20])[1];
 				my $memused = int (($memtotal - $memavail) / ($memtotal / 100));
 
-				$meminfo = sprintf (
+				my $mem = sprintf (
 					'M:%d%% SHM:%dM SW:%dM',
 					$memused,
 					int ($shmem / 1024),
 					int (($swaptotal - $swapfree) / 1024)
 				);
+
+				if (! defined $O->{mem}->{'full_text'}) {
+					$O->{mem}->{'full_text'} = $mem;
+					$O->{mem}->{'color'} = '#3e78fd';
+					$UPDATE = 1;
+				} elsif ($O->{mem}->{'full_text'} ne $mem) {
+					$O->{mem}->{'full_text'} = $mem;
+					$UPDATE = 1;
+				}
 			}
 
 			# populate cpu temperature info
 			if ($CONF->{cpu_temp}->{enabled}) {
 				my $hwmon = 1;
+				my $CPUTEMPHANDLE;
 
-				if (defined $CPUTEMPHANDLE) {
-					if (tell $CPUTEMPHANDLE == -1) {
-						if (open $CPUTEMPHANDLE, '<', $CONF->{cpu_temp}->{file}) {
-							$hwmon = 1;
-						} else {
-							$hwmon = 0;
-						}
-					}
-				} else {
-					unless (open $CPUTEMPHANDLE, '<', $CONF->{cpu_temp}->{file}) {
-						$hwmon = 0;
-					};
-				}
+				unless (open $CPUTEMPHANDLE, '<', $CONF->{cpu_temp}->{file}) {
+					$hwmon = 0;
+				};
 
 				if ($hwmon) {
-					$cputemp = readline $CPUTEMPHANDLE;
-					seek $CPUTEMPHANDLE, SEEK_SET, 0;
+					my $cputemp = readline $CPUTEMPHANDLE;
+					close $CPUTEMPHANDLE;
 					chomp $cputemp;
 					$cputemp = int $cputemp;
 
@@ -563,6 +592,15 @@ sub add_events () {
 					}
 
 					$cputemp = sprintf '%s°', $cputemp;
+
+					if (! defined $O->{cputemp}->{'full_text'}) {
+						$O->{cputemp}->{'full_text'} = $cputemp;
+						$O->{cputemp}->{'color'} = '#3e78fd';
+						$UPDATE = 1;
+					} elsif ($O->{cputemp}->{'full_text'} ne $cputemp) {
+						$O->{cputemp}->{'full_text'} = $cputemp;
+						$UPDATE = 1;
+					}
 				}
 			}
 		},
@@ -575,28 +613,25 @@ sub add_events () {
 			interval => 3,    # then invoke every 3 seconds
 			cb       => sub { # the callback to invoke
 				my $mtime = (stat $CONF->{vpn}->{statusfile}) [9];
+				my $vpnstr = 'VPN:';
 
 				if (defined $mtime) {
 					if ((time () - $mtime) < $CONF->{vpn}->{mtime_threshold}) {
-						$file_check = 1;
+						$vpnstr .= '⍋';
 					} else {
-						$file_check = 0;
+						$vpnstr .= '⍒';
 					}
 
 					$file_check_mtime = $mtime;
 				} else {
 					$mtime = 0;
-					$file_check = 0;
+					$vpnstr .= '⍒';
 				}
-			}
-		);
 
-		# Try to tcp connect to server in vpn network
-		if ($CONF->{vpn}->{tcp_check}->{enabled}) {
-			push @EP, AnyEvent->timer (
-				after    => 0,    # first invoke ASAP
-				interval => 5,    # then invoke every 5 seconds
-				cb       => sub { # the callback to invoke
+				# Try to tcp connect to server in vpn network
+				if ($CONF->{vpn}->{tcp_check}->{enabled}) {
+					$vpnstr .= ':';
+
 					if (
 						my $sock = IO::Socket->new (
 							Domain   => AF_INET,
@@ -609,13 +644,22 @@ sub add_events () {
 					) {
 						$sock->shutdown (SHUT_WR);
 						$sock->close ();
-						$tcp_check = 1;
+						$vpnstr .= '✔';
 					} else {
-						$tcp_check = 0;
+						$vpnstr .= '✘';
 					}
 				}
-			);
-		}
+
+				if (! defined $O->{vpn}->{'full_text'}) {
+					$O->{vpn}->{'full_text'} = $vpnstr;
+					$O->{vpn}->{'color'} = '#3e78fd';
+					$UPDATE = 1;
+				} elsif ($O->{vpn}->{'full_text'} ne $vpnstr) {
+					$O->{vpn}->{'full_text'} = $vpnstr;
+					$UPDATE = 1;
+				}
+			}
+		);
 	}
 
 	# poll pulseaudio volume on first sink in list
@@ -633,7 +677,15 @@ sub add_events () {
 
 				foreach my $str (split /\n/, $pactl) {
 					if ($str =~ /^\s+Volume\:\s+[a-z|A-Z\\-]+\:\s+\d+\s+\/\s+(\d+)% /xms ) {
-						$simple_volume_pa = $1;
+						if (! defined $O->{'simple-volume-pa'}->{'full_text'}) {
+							$O->{'simple-volume-pa'}->{'full_text'} = $1;
+							$O->{'simple-volume-pa'}->{'color'} = '#3e78fd';
+							$UPDATE = 1;
+						} elsif ($O->{'simple-volume-pa'}->{'full_text'} ne $1) {
+							$O->{'simple-volume-pa'}->{'full_text'} = $1;
+							$UPDATE = 1;
+						}
+
 						last;
 					}
 				}
@@ -648,6 +700,7 @@ sub add_events () {
 			interval => 1,    # then invoke every 1 second
 			cb       => sub { # the callback to invoke
 				my @ifstate;
+				my $interfaces;
 
 				foreach my $if (@{$CONF->{'net-if'}->{if}}) {
 					if (open my $STATEFH, '<', "$if->{dir}/operstate") {
@@ -665,6 +718,16 @@ sub add_events () {
 
 				if ($#ifstate >=0 ) {
 					$interfaces = join '  ', @ifstate;
+				}
+
+				if (! defined $O->{interfaces}->{full_text}) {
+					$O->{interfaces}->{color} = $CONF->{color};
+					$O->{interfaces}->{full_text} = $interfaces;
+					$O->{interfaces}->{markup} = 'pango';
+					$UPDATE = 1;
+				} elsif ($O->{interfaces}->{full_text} ne $interfaces) {
+					$O->{interfaces}->{full_text} = $interfaces;
+					$UPDATE = 1;
 				}
 			}
 		);
@@ -698,9 +761,9 @@ sub spawn (@) {
 	} elsif ($pid == 0) { # Child
 		setsid ();
 		# it seems that at least vscode creashes if we close stdio handles
-		open STDOUT, '>', '/dev/null';
-		open STDERR, '>', '/dev/null';
-		open STDIN,  '<', '/dev/null';
+		open STDOUT, '>', '/dev/null'; ## no critic (InputOutput::RequireCheckedOpen)
+		open STDERR, '>', '/dev/null'; ## no critic (InputOutput::RequireCheckedOpen)
+		open STDIN,  '<', '/dev/null'; ## no critic (InputOutput::RequireCheckedOpen)
 		$pid = fork ();
 
 		if ($pid) { # Parent
