@@ -70,7 +70,10 @@
 # Simplified volume indicator
 # it periodically polls pulseaudio via "pactl list sinks" command
 # so it's not light on system resources as i'd like
-"simple-volume-pa": 0,
+"simple-volume-pa": {
+	"enabled": 0,
+	"symbol": "🎶"
+},
 
 "net-if" : {
 	"enabled" : 0,

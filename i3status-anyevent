@@ -683,7 +683,7 @@ sub add_events () {
 	}
 
 	# poll pulseaudio volume on first sink in list
-	if ($CONF->{'simple-volume-pa'}) {
+	if ($CONF->{'simple-volume-pa'}->{enabled}) {
 		push @EP, AnyEvent->timer (
 			after    => 0,    # first invoke ASAP
 			interval => 1,    # then invoke every 1 second
@@ -697,12 +697,15 @@ sub add_events () {
 
 				foreach my $str (split /\n/, $pactl) {
 					if ($str =~ /^\s+Volume\:\s+[a-z|A-Z\\-]+\:\s+\d+\s+\/\s+(\d+)% /xms ) {
+						my $volumestr = sprintf '<big>%s</big> %s%%', $CONF->{'simple-volume-pa'}->{symbol}, $1;
+
 						if (! defined $O->{'simple-volume-pa'}->{'full_text'}) {
-							$O->{'simple-volume-pa'}->{'full_text'} = $1;
+							$O->{'simple-volume-pa'}->{'full_text'} = $volumestr;
 							$O->{'simple-volume-pa'}->{'color'} = '#3e78fd';
+							$O->{'simple-volume-pa'}->{'markup'} = 'pango';
 							$UPDATE = 1;
-						} elsif ($O->{'simple-volume-pa'}->{'full_text'} ne $1) {
-							$O->{'simple-volume-pa'}->{'full_text'} = $1;
+						} elsif ($O->{'simple-volume-pa'}->{'full_text'} ne $volumestr) {
+							$O->{'simple-volume-pa'}->{'full_text'} = $volumestr;
 							$UPDATE = 1;
 						}
 
