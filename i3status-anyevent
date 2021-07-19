@@ -19,7 +19,6 @@ use utf8;
 use open qw (:std :utf8);
 use Fcntl qw (:seek);
 use AnyEvent;
-use AnyEvent::Timer::Cron;
 use AnyEvent::I3;
 use JSON::XS;
 use Encode;
@@ -36,6 +35,12 @@ sub readconf ();
 sub active_win_borders ();
 
 my $CONF = readconf ();
+
+# load AnyEvent::Timer::Cron only if cron enabled in config
+if ($CONF->{'cron'}->{enabled}) {
+	require AnyEvent::Timer::Cron;
+}
+
 my $i3 = i3 ();
 my $done = AnyEvent->condvar;
 $i3->connect->recv or die 'Unable to connect to i3';
