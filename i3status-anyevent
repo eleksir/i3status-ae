@@ -40,6 +40,9 @@ my $i3 = i3 ();
 my $done = AnyEvent->condvar;
 $i3->connect->recv or die 'Unable to connect to i3';
 
+# Local Time Counter
+my $TC = time();
+
 # event pool
 my @EP;
 
@@ -758,6 +761,20 @@ sub add_events () {
 				}
 			)
 		}
+
+		# also we need workaround for timers after sleep or hibernate
+		push @EP, AnyEvent->timer (
+			after    => 60,   # first invoke after 1 minute
+			interval => 60,   # then invoke every 1 second
+			cb       => sub { # the callback to invoke
+				$TC = $TC + 60;
+				my $timeskew = $TC - time ();
+
+				if (($timeskew > 60) || ($timeskew < -60)) {
+					kill 'HUP', $$;
+				}
+			}
+		);
 	}
 
 	return;
