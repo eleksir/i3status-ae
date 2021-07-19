@@ -89,6 +89,8 @@ unless (-f $BATTERY_CHARGE_FULL_FILE) {
 }
 
 my $CAPS_LED_PATH = find_caps_led ();
+my $CAPS_LED_SKIPS = 0;
+my $CAPS_LED_SKIPS_MAX = 180;
 
 # opened windows info storage ref
 my $win;
@@ -285,6 +287,7 @@ sub add_events () {
 			cb       => sub { # the callback to invoke
 				my $caps_state = 0;
 				my $CAPSHANDLE;
+				my $xsetflag = 0;
 
 				if (defined $CAPS_LED_PATH) {
 					unless (open $CAPSHANDLE, '<', $CAPS_LED_PATH) {
@@ -292,13 +295,39 @@ sub add_events () {
 						$caps_state = 2
 					}
 				} else {
-					$caps_state = 2;
+					# we can use "$ xset q | grep Caps" as fallback, but it is notably more expensive check
+					my $xset = `xset q`;
+					$xsetflag = 1;
+
+					if ($?) {
+						# some kind of error, so we assume that we cannot update caps lock status
+						$caps_state = 2;
+					} else {
+						$xset =~ /Caps Lock\:\s+(o[n|f]f?)\s+/;
+
+						if ($1 eq 'off') {
+							$caps_state = 0;
+						} elsif ($1 eq 'on') {
+							$caps_state = 1;
+						} else {
+							$caps_state = 2;
+						}
+					}
+
+					if ($CAPS_LED_SKIPS == $CAPS_LED_SKIPS_MAX) {
+						$CAPS_LED_SKIPS = 0;
+						$CAPS_LED_PATH = find_caps_led ();
+					} else {
+						$CAPS_LED_SKIPS++;
+					}
 				}
 
 				if ($caps_state ne '2') {
-					$caps_state = readline $CAPSHANDLE;
-					close $CAPSHANDLE;
-					chomp $caps_state;
+					unless ($xsetflag) {
+						$caps_state = readline $CAPSHANDLE;
+						close $CAPSHANDLE;
+						chomp $caps_state;
+					}
 
 					if (! defined $O->{capslock}->{state}) {
 						$O->{capslock}->{border} = $CONF->{capslock}->{background};
