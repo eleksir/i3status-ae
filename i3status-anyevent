@@ -826,7 +826,7 @@ sub spawn (@) {
 		return;
 	} elsif ($pid == 0) { # Child
 		setsid ();
-		# it seems that at least vscode creashes if we close stdio handles
+		# it seems that at least vscode crashes if we close stdio handles
 		open STDOUT, '>', '/dev/null'; ## no critic (InputOutput::RequireCheckedOpen)
 		open STDERR, '>', '/dev/null'; ## no critic (InputOutput::RequireCheckedOpen)
 		open STDIN,  '<', '/dev/null'; ## no critic (InputOutput::RequireCheckedOpen)
