@@ -26,3 +26,4 @@ verbose     = 8
 [-Modules::RequireVersionVar]
 [-CodeLayout::RequireTidyCode]
 [-TestingAndDebugging::RequireUseWarnings]
+[-ControlStructures::ProhibitDeepNests]

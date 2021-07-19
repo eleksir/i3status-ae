@@ -229,48 +229,48 @@ sub add_events () {
 		fh   => \*STDIN,
 		poll => 'r',
 		cb   => sub {
-			my $msg = <>;
-
-			unless ($STDIN_FIRST_LINE_DROPPED) {
-				$msg = <>;
-				$STDIN_FIRST_LINE_DROPPED = 1;
-			}
-
-			if ($msg) {
-				# drop leading ',' if present
-				if (substr ($msg, 0, 1) eq ',') {
-					$msg = substr $msg, 1;
+			while (my $msg = <>) {
+				unless ($STDIN_FIRST_LINE_DROPPED) {
+					$STDIN_FIRST_LINE_DROPPED = 1;
+					next;
 				}
 
-				my $j = eval { decode_json $msg };
-
-				if (defined $j) {
-					# left button click, without shift, ctrl, alt, etc
-					if (($j->{button} == 1) && ($#{$j->{modifiers}} < 0)) {
-						foreach (@{$CONF->{apps}}) {
-							unless (defined $_->{name}) {
-								next;
-							}
-
-							unless (defined $j->{name}) {
-								next;
-							}
-
-							if ($j->{name} eq $_->{name}) {
-								spawn ($_->{cmd});
-								last;
-							}
-						}
+				if ($msg) {
+					# drop leading ',' if present
+					if (substr ($msg, 0, 1) eq ',') {
+						$msg = substr $msg, 1;
 					}
 
-					if (($j->{name} eq 'wallclock') && ($CONF->{clock}->{enabled})) {
-						if ($CONF->{clock}->{left_click}->{enabled}) {
-							if (($j->{button} == 1) && ($#{$j->{modifiers}} < 0)) {
-								spawn ($CONF->{clock}->{left_click}->{cmd});
+					my $j = eval { decode_json $msg };
+
+					if (defined $j) {
+						# left button click, without shift, ctrl, alt, etc
+						if (($j->{button} == 1) && ($#{$j->{modifiers}} < 0)) {
+							foreach (@{$CONF->{apps}}) {
+								unless (defined $_->{name}) {
+									next;
+								}
+
+								unless (defined $j->{name}) {
+									next;
+								}
+
+								if ($j->{name} eq $_->{name}) {
+									spawn ($_->{cmd});
+									last;
+								}
 							}
-						} elsif ($CONF->{clock}->{right_click}->{enabled}) {
-							if (($j->{button} == 2) && ($#{$j->{modifiers}} < 0)) {
-								spawn ($CONF->{clock}->{right_click}->{cmd});
+						}
+
+						if (($j->{name} eq 'wallclock') && ($CONF->{clock}->{enabled})) {
+							if ($CONF->{clock}->{left_click}->{enabled}) {
+								if (($j->{button} == 1) && ($#{$j->{modifiers}} < 0)) {
+									spawn ($CONF->{clock}->{left_click}->{cmd});
+								}
+							} elsif ($CONF->{clock}->{right_click}->{enabled}) {
+								if (($j->{button} == 2) && ($#{$j->{modifiers}} < 0)) {
+									spawn ($CONF->{clock}->{right_click}->{cmd});
+								}
 							}
 						}
 					}
