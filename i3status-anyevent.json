@@ -53,6 +53,9 @@
 # state file and update its timestamp at least as frequent as mtime_threshold in seconds
 "vpn": {
 	"enabled": 0,
+# html (actually, pango) notation
+	"down_color" : "red",
+	"up_color" : "green",
 	"statusfile" : "/tmp/openvpn-status.stat",
 	"mtime_threshold": 10,
 # Also we can tcp-ping some service inside vpn network to ensure that connection is not stoned

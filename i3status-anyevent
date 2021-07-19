@@ -374,8 +374,7 @@ sub add_events () {
 
 					while ($str = pop (@up)) {
 						if (substr ($str, 4, 10) eq 'percentage') {
-							$percentage = substr $str, 25;
-							chomp $percentage;
+							$percentage = substr $str, 25, -1; # chop % symbol ath the end of the string
 						} elsif (substr ($str, 4, 5) eq 'state') {
 							if (substr ($str, 25, 11) eq 'discharging') {
 								$state = '▼';
@@ -393,6 +392,18 @@ sub add_events () {
 
 					unless (defined $percentage && defined $state) {
 						return;
+					}
+
+					my $color = '<span foreground="Blue">';
+
+					if ($percentage > 85) {
+						$color = '<span foreground="LimeGreen">';
+					} elsif ($percentage < 25 && $percentage > 15) {
+						$color = '<span foreground="Goldenrod">';
+					} elsif ($percentage <= 15 && $percentage > 11) {
+						$color = '<span foreground="DarkOrange">';
+					} elsif ($percentage <= 11) {
+						$color = '<span foreground="Red">';
 					}
 
 					if (defined $time_to) {
@@ -413,7 +424,7 @@ sub add_events () {
 						$time_to = '00:00';
 					}
 
-					my $charge = sprintf '<big>⚡</big> %s %s %s', $percentage, $state, $time_to;
+					my $charge = sprintf '<b><big><span foreground="Goldenrod">⚡</span></big></b> %s%s%%</span> %s %s', $color, $percentage, $state, $time_to;
 
 					if (! defined $O->{battery}->{'full_text'}) {
 						$O->{battery}->{'full_text'} = $charge;
@@ -491,19 +502,19 @@ sub add_events () {
 					}
 
 					my $capacity = int (100 * ($current_charge / $charge_max));
-					my $color = '<span foreground="blue">';
+					my $color = '<span foreground="Blue">';
 
 					if ($capacity > 85) {
-						$color = '<span foreground="green">';
+						$color = '<span foreground="LimeGreen">';
 					} elsif ($capacity < 25 && $capacity > 15) {
-						$color = '<span foreground="yellow">';
+						$color = '<span foreground="Goldenrod">';
 					} elsif ($capacity <= 15 && $capacity > 11) {
-						$color = '<span foreground="orange">';
+						$color = '<span foreground="DarkOrange">';
 					} elsif ($capacity <= 11) {
-						$color = '<span foreground="red">';
+						$color = '<span foreground="Red">';
 					}
 
-					my $charge = sprintf '<b><big><span foreground="yellow">⚡</span></big></b> %s%s%%</span> %s', $color, $capacity, $state;
+					my $charge = sprintf '<b><big><span foreground="Goldenrod">⚡</span></big></b> %s%s%%</span> %s', $color, $capacity, $state;
 
 					if ($O->{battery}->{'full_text'} ne $charge) {
 						$O->{battery}->{'full_text'} = $charge;
@@ -617,15 +628,15 @@ sub add_events () {
 
 				if (defined $mtime) {
 					if ((time () - $mtime) < $CONF->{vpn}->{mtime_threshold}) {
-						$vpnstr .= '⍋';
+						$vpnstr .= sprintf '<span foreground="%s">⍋</span>', $CONF->{vpn}->{up_color};
 					} else {
-						$vpnstr .= '⍒';
+						$vpnstr .= sprintf '<span foreground="%s">⍒</span>', $CONF->{vpn}->{down_color};
 					}
 
 					$file_check_mtime = $mtime;
 				} else {
 					$mtime = 0;
-					$vpnstr .= '⍒';
+					$vpnstr .= sprintf '<span foreground="%s">⍒</span>', $CONF->{vpn}->{up_down};
 				}
 
 				# Try to tcp connect to server in vpn network
@@ -644,13 +655,14 @@ sub add_events () {
 					) {
 						$sock->shutdown (SHUT_WR);
 						$sock->close ();
-						$vpnstr .= '✔';
+						$vpnstr .= sprintf '<span foreground="%s">✔</span>', $CONF->{vpn}->{up_color};
 					} else {
-						$vpnstr .= '✘';
+						$vpnstr .= sprintf '<span foreground="%s">✘</span>', $CONF->{vpn}->{down_color};
 					}
 				}
 
 				if (! defined $O->{vpn}->{'full_text'}) {
+					$O->{vpn}->{'markup'} = 'pango';
 					$O->{vpn}->{'full_text'} = $vpnstr;
 					$O->{vpn}->{'color'} = '#3e78fd';
 					$UPDATE = 1;
