@@ -153,13 +153,6 @@ sub add_events () {
 	}
 
 	# Register callbacks/event handlers
-	push @EP, AnyEvent->timer (
-		after => 1,
-		interval => 120,
-		cb => sub {
-			AnyEvent->now_update;
-		},
-	);
 
 	# Actually print messages there
 	push @EP, AnyEvent->timer (
