@@ -666,7 +666,7 @@ sub add_events () {
 					$file_check_mtime = $mtime;
 				} else {
 					$mtime = 0;
-					$vpnstr .= sprintf '<span foreground="%s">⍒</span>', $CONF->{vpn}->{up_down};
+					$vpnstr .= sprintf '<span foreground="%s">⍒</span>', $CONF->{vpn}->{down_color};
 				}
 
 				# Try to tcp connect to server in vpn network
