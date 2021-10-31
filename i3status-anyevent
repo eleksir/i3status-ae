@@ -2,12 +2,14 @@
 
 use strict;
 use warnings;
+use English qw ( -no_match_vars );
 
 # we need to disable hash shuffling in order to make as less prints to stdout as possible
 BEGIN {
 	unless (defined $ENV{PERL_PERTURB_KEYS}) {
 		$ENV{PERL_PERTURB_KEYS} = 0;
-		exec ( $^X, $0, @ARGV );
+		$ENV{PERL_ANYEVENT_MODEL} = 'EV';
+		exec ( $EXECUTABLE_NAME, $PROGRAM_NAME, @ARGV );
 		exit 0; # we actually never get here
 	}
 }
@@ -25,7 +27,7 @@ use Encode;
 use IO::Socket qw (AF_INET SOCK_STREAM SHUT_WR);
 use POSIX qw (setsid);
 
-local $| = 1;
+local $OUTPUT_AUTOFLUSH = 1;
 
 sub add_events ();
 sub spawn (@);
@@ -208,7 +210,7 @@ sub add_events () {
 				if (defined $output_string) {
 						print {*STDOUT} decode ('UTF-8', $output_string) . ",\n";
 				} else {
-					warn $@;
+					warn $EVAL_ERROR;
 				}
 
 				$UPDATE = 0;
@@ -292,7 +294,7 @@ sub add_events () {
 					my $xset = `xset q`;
 					$xsetflag = 1;
 
-					if ($?) {
+					if ($CHILD_ERROR) {
 						# some kind of error, so we assume that we cannot update caps lock status
 						$caps_state = 2;
 					} else {
@@ -391,7 +393,7 @@ sub add_events () {
 					my @up;
 					my $str = `upower -i $CONF->{battery}->{upower_device}`;
 
-					if ($?) {
+					if ($CHILD_ERROR) {
 						return;
 					}
 
@@ -712,7 +714,7 @@ sub add_events () {
 			cb       => sub { # the callback to invoke
 				my $pactl = `LC_ALL=C pactl list sinks`;
 
-				if ($?) {
+				if ($CHILD_ERROR) {
 					# we've some error here, so quit further processing
 					return;
 				}
@@ -801,7 +803,7 @@ sub add_events () {
 				my $timeskew = $TC - time ();
 
 				if (($timeskew > 60) || ($timeskew < -60)) {
-					kill 'HUP', $$;
+					kill 'HUP', $PROCESS_ID;
 				}
 			}
 		);
@@ -894,7 +896,7 @@ sub readconf () {
 	my $FH;
 
 	unless (open $FH, '<', $file) {
-		die "Unable to open $file: $!\n";
+		die "Unable to open $file: $OS_ERROR\n";
 	}
 
 	my $len = (stat $file)[7];
@@ -905,7 +907,7 @@ sub readconf () {
 	close $FH;
 
 	unless (defined $readlen) {
-		die "Unable to read $file: $!\n";
+		die "Unable to read $file: $OS_ERROR\n";
 	}
 
 	if ($readlen != $len) {
@@ -915,7 +917,7 @@ sub readconf () {
 	my $config = eval { JSON::XS->new->utf8->relaxed->decode ($data) };
 
 	unless ($config) {
-		die "Unable to decode $file: $@\n";
+		die "Unable to decode $file: $EVAL_ERROR\n";
 	}
 
 	return $config;

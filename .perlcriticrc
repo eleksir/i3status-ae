@@ -2,7 +2,6 @@
 severity    = 5
 verbose     = 8
 
-[-Variables::ProhibitPunctuationVars]
 [-ControlStructures::ProhibitUnlessBlocks]
 [-Variables::RequireLocalizedPunctuationVars]
 [-Subroutines::ProhibitSubroutinePrototypes]
