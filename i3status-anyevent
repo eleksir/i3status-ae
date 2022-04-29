@@ -208,7 +208,7 @@ sub add_events () {
 				my $output_string = eval { encode_json $jsonobj };
 
 				if (defined $output_string) {
-						print {*STDOUT} decode ('UTF-8', $output_string) . ",\n";
+					print {*STDOUT} decode ('UTF-8', $output_string) . ",\n";
 				} else {
 					warn $EVAL_ERROR;
 				}
@@ -233,8 +233,8 @@ sub add_events () {
 
 			if ($msg) {
 				# drop leading ',' if present
-				if (substr ($msg, 0, 1) eq ',') {
-					$msg = substr $msg, 1;
+				if (substr ($msg, 0, length (',')) eq ',') {
+					$msg = substr $msg, length (',');
 				}
 
 				my $j = eval { decode_json $msg };
@@ -405,19 +405,19 @@ sub add_events () {
 					my $minutes = 0;
 
 					while ($str = pop (@up)) {
-						if (substr ($str, 4, 10) eq 'percentage') {
-							$percentage = substr $str, 25, -1; # chop % symbol ath the end of the string
-						} elsif (substr ($str, 4, 5) eq 'state') {
-							if (substr ($str, 25, 11) eq 'discharging') {
+						if (substr ($str, 4, length ('percentage')) eq 'percentage') {
+							$percentage = substr $str, 25, 0 - length ('%'); # chop % symbol at the end of the string
+						} elsif (substr ($str, 4, length ('state')) eq 'state') {
+							if (substr ($str, 25, length ('discharging')) eq 'discharging') {
 								$state = '▼';
-							} elsif (substr ($str, 25, 8) eq 'charging') {
+							} elsif (substr ($str, 25, length ('charging')) eq 'charging') {
 								$state = '▲';
 							} else {
 								$state = '•';
 							}
-						} elsif (substr ($str, 4, 13) eq 'time to empty') {
+						} elsif (substr ($str, 4, length ('time to empty')) eq 'time to empty') {
 							$time_to = substr $str, 25;
-						} elsif (substr ($str, 4, 12) eq 'time to full') {
+						} elsif (substr ($str, 4, length ('time to full')) eq 'time to full') {
 							$time_to = substr $str, 25;
 						}
 					}
@@ -441,12 +441,12 @@ sub add_events () {
 					if (defined $time_to) {
 						chomp $time_to;
 
-						if (substr ($time_to, -7) eq 'minutes') {
-							$minutes = substr $time_to, 0, -8;
+						if (substr ($time_to, 0 - length ('minutes')) eq 'minutes') {
+							$minutes = substr $time_to, 0, 0 - length (' minutes');
 							$minutes =~ tr/\,/./;
 							$minutes = int $minutes;
-						} elsif (substr ($time_to, -5) eq 'hours') {
-							$hours = substr $time_to, 0, -6;
+						} elsif (substr ($time_to, 0 - length ('hours')) eq 'hours') {
+							$hours = substr $time_to, 0, 0 - length (' hours');
 							$hours =~ tr/\,/./;
 							$minutes = int (60 * ($hours - int ($hours)));
 						}
@@ -590,7 +590,7 @@ sub add_events () {
 				}
 
 				close $MEMINFOHANDLE;
-				@mem = map { substr $_, 0, -4 } @mem;
+				@mem = map { substr $_, 0, 0 - length (" kB\n") } @mem;
 				my $memtotal = (split /\s+/xms, $mem[0])[1];
 				my $memavail  = (split /\s+/xms, $mem[2])[1];
 				my $swaptotal = (split /\s+/xms, $mem[14])[1];
