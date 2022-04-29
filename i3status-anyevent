@@ -838,8 +838,10 @@ sub spawn (@) {
 
 			if (@args > 0) {
 				exec $prg, @args;
+				exit 0;
 			} else {
 				exec $prg;
+				exit 0;
 			}
 		}
 		# else - we just unable to fork, so silently ignore event
