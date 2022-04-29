@@ -21,7 +21,7 @@ use utf8;
 use open qw (:std :utf8);
 use Fcntl qw (:seek);
 use AnyEvent ();
-use AnyEvent::I3 ();
+use AnyEvent::I3 qw (i3);
 use JSON::XS qw (encode_json decode_json);
 use Encode qw (decode);
 use IO::Socket qw (AF_INET SOCK_STREAM SHUT_WR);
