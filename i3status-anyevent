@@ -126,6 +126,9 @@ my $i3_subscription->{window} = sub {
 					}
 				}
 			}
+		} else {
+			# we just don't care about other events now
+			return;
 		}
 
 		active_win_borders ();
@@ -165,45 +168,16 @@ sub add_events () {
 			if ($UPDATE) {
 				my $jsonobj;
 
-				if ($CONF->{app_buttons}) {
-					@{$jsonobj} = @{$O->{apps}};
-				}
-
-				if ($CONF->{capslock}->{enabled}) {
-					push @{$jsonobj}, $O->{capslock};
-				}
-
-				if ($CONF->{cpu_temp}->{enabled}) {
-					push @{$jsonobj}, $O->{cputemp};
-				}
-
-				if ($CONF->{mem}) {
-					push @{$jsonobj}, $O->{mem};
-				}
-
-				if ($CONF->{la}) {
-					push @{$jsonobj}, $O->{la};
-				}
-
-				if ($CONF->{vpn}->{enabled}) {
-					push @{$jsonobj}, $O->{vpn};
-				}
-
-				if ($CONF->{'net-if'}->{enabled}) {
-					push @{$jsonobj}, $O->{interfaces};
-				}
-
-				if ($CONF->{battery}->{enabled}) {
-					push @{$jsonobj}, $O->{battery};
-				}
-
-				if ($CONF->{'simple-volume-pa'}) {
-					push @{$jsonobj}, $O->{'simple-volume-pa'};
-				}
-
-				if ($CONF->{clock}->{enabled}) {
-					push @{$jsonobj}, $O->{wallclock};
-				}
+				@{$jsonobj}   = @{$O->{apps}}              if $CONF->{app_buttons};
+				push @{$jsonobj}, $O->{capslock}           if $CONF->{capslock}->{enabled};
+				push @{$jsonobj}, $O->{cputemp}            if $CONF->{cpu_temp}->{enabled};
+				push @{$jsonobj}, $O->{mem}                if $CONF->{mem};
+				push @{$jsonobj}, $O->{la}                 if $CONF->{la};
+				push @{$jsonobj}, $O->{vpn}                if $CONF->{vpn}->{enabled};
+				push @{$jsonobj}, $O->{interfaces}         if $CONF->{'net-if'}->{enabled};
+				push @{$jsonobj}, $O->{battery}            if $CONF->{battery}->{enabled};
+				push @{$jsonobj}, $O->{'simple-volume-pa'} if $CONF->{'simple-volume-pa'};
+				push @{$jsonobj}, $O->{wallclock}          if $CONF->{clock}->{enabled};
 
 				my $output_string = eval { encode_json $jsonobj };
 
@@ -591,12 +565,12 @@ sub add_events () {
 
 				close $MEMINFOHANDLE;
 				@mem = map { substr $_, 0, 0 - length (" kB\n") } @mem;
-				my $memtotal = (split /\s+/xms, $mem[0])[1];
+				my $memtotal  = (split /\s+/xms, $mem[0])[1];
 				my $memavail  = (split /\s+/xms, $mem[2])[1];
 				my $swaptotal = (split /\s+/xms, $mem[14])[1];
 				my $swapfree  = (split /\s+/xms, $mem[15])[1];
-				my $shmem = (split /\s+/xms, $mem[20])[1];
-				my $memused = int (($memtotal - $memavail) / ($memtotal / 100));
+				my $shmem     = (split /\s+/xms, $mem[20])[1];
+				my $memused   = int (($memtotal - $memavail) / ($memtotal / 100));
 
 				my $mem = sprintf (
 					'M:%d%% SHM:%dM SW:%dM',
@@ -607,7 +581,7 @@ sub add_events () {
 
 				if (! defined $O->{mem}->{'full_text'}) {
 					$O->{mem}->{'full_text'} = $mem;
-					$O->{mem}->{'color'} = '#3e78fd';
+					$O->{mem}->{'color'}     = '#3e78fd';
 					$UPDATE = 1;
 				} elsif ($O->{mem}->{'full_text'} ne $mem) {
 					$O->{mem}->{'full_text'} = $mem;
@@ -638,7 +612,7 @@ sub add_events () {
 
 					if (! defined $O->{cputemp}->{'full_text'}) {
 						$O->{cputemp}->{'full_text'} = $cputemp;
-						$O->{cputemp}->{'color'} = '#3e78fd';
+						$O->{cputemp}->{'color'}     = '#3e78fd';
 						$UPDATE = 1;
 					} elsif ($O->{cputemp}->{'full_text'} ne $cputemp) {
 						$O->{cputemp}->{'full_text'} = $cputemp;
@@ -694,9 +668,9 @@ sub add_events () {
 				}
 
 				if (! defined $O->{vpn}->{'full_text'}) {
-					$O->{vpn}->{'markup'} = 'pango';
+					$O->{vpn}->{'markup'}    = 'pango';
 					$O->{vpn}->{'full_text'} = $vpnstr;
-					$O->{vpn}->{'color'} = '#3e78fd';
+					$O->{vpn}->{'color'}     = '#3e78fd';
 					$UPDATE = 1;
 				} elsif ($O->{vpn}->{'full_text'} ne $vpnstr) {
 					$O->{vpn}->{'full_text'} = $vpnstr;
@@ -725,8 +699,8 @@ sub add_events () {
 
 						if (! defined $O->{'simple-volume-pa'}->{'full_text'}) {
 							$O->{'simple-volume-pa'}->{'full_text'} = $volumestr;
-							$O->{'simple-volume-pa'}->{'color'} = '#3e78fd';
-							$O->{'simple-volume-pa'}->{'markup'} = 'pango';
+							$O->{'simple-volume-pa'}->{'color'}     = '#3e78fd';
+							$O->{'simple-volume-pa'}->{'markup'}    = 'pango';
 							$UPDATE = 1;
 						} elsif ($O->{'simple-volume-pa'}->{'full_text'} ne $volumestr) {
 							$O->{'simple-volume-pa'}->{'full_text'} = $volumestr;
@@ -768,9 +742,9 @@ sub add_events () {
 				}
 
 				if (! defined $O->{interfaces}->{full_text}) {
-					$O->{interfaces}->{color} = $CONF->{color};
+					$O->{interfaces}->{color}     = $CONF->{color};
 					$O->{interfaces}->{full_text} = $interfaces;
-					$O->{interfaces}->{markup} = 'pango';
+					$O->{interfaces}->{markup}    = 'pango';
 					$UPDATE = 1;
 				} elsif ($O->{interfaces}->{full_text} ne $interfaces) {
 					$O->{interfaces}->{full_text} = $interfaces;
